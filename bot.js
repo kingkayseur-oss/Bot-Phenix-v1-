@@ -8,7 +8,7 @@ const { delay } = require('@whiskeysockets/baileys');
 const CHANNEL_LINK = "https://whatsapp.com/channel/0029Vb8cfQn8V0te5K0atc1s"
 const LOGO_PATH = './public/logo.png'
 const OWNER_TG = "https://t.me/Mr_king_kayseur"
-const OWNER_NAME = "Mr King Kayseur • The Glitch Dev 💎"
+const OWNER_NAME = "Mr King Kayseur • The Glitch Dev"
 
 const boxStar = (title, content) => {
 return `╭━━━〔 ★ ${title} ★ 〕━━━╮
@@ -98,16 +98,20 @@ const menuStar = `
        *_★ by mr king Kayseur • the glitch dev ★_*
 `;
 
-module.exports = async (sock) => {
+module.exports = (sock) => {
     let settings = { antilink: {}, welcome: {}, goodbye: {}, antibad: {} };
-    if(fs.existsSync('./settings.json')) settings = JSON.parse(fs.readFileSync('./settings.json'));
+    if(fs.existsSync('./settings.json')){
+        try{ settings = JSON.parse(fs.readFileSync('./settings.json')); }catch{}
+    }
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
+        try {
         const m = messages[0];
         if(!m.message || m.key.fromMe) return;
         const from = m.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
         const textRaw = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+        if(!textRaw) return;
         const text = textRaw.toLowerCase();
         const args = textRaw.split(' ');
         const cmd = args[0].toLowerCase().replace(/^[.\/!🍓🔥👑📢]/,'').trim();
@@ -115,7 +119,7 @@ module.exports = async (sock) => {
         const sender = m.key.participant || from;
         const replyStar = (t,c) => sock.sendMessage(from, { text: boxStar(t,c) }, { quoted: m });
 
-        // ANTI-LINK ÉTOILÉ QUI SUPPRIME
+        // ANTI-LINK
         if(isGroup && settings.antilink[from] && /(https?:\/\/|chat\.whatsapp\.com|t\.me\/|wa\.me\/|whatsapp\.com\/channel)/i.test(textRaw)){
             try{
                 const meta = await sock.groupMetadata(from);
@@ -125,12 +129,10 @@ module.exports = async (sock) => {
                     await sock.sendMessage(from, { delete: m.key });
                     await sock.sendMessage(from, {
                         text: `╭━━━〔 ★ *ANTI-LINK* ★ 〕━━━╮
-┃
 ┃ ★ 🚫 LIEN INTERDIT!
 ┃ ★ 👤 @${sender.split('@')[0]}
 ┃ ★ 🔗 Suppression auto
-┃ ★ 🛡️ PHENIX GLITCH V1
-┃
+┃ ★ 🛡️ PHENIX V1
 ╰━━━〔 ★ *PROTECTED* ★ 〕━━━╯`,
                         mentions:[sender]
                     });
@@ -141,16 +143,20 @@ module.exports = async (sock) => {
         if(['ping','speed'].includes(cmd)){
             let s = Date.now();
             await delay(300);
-            await sock.sendMessage(from, {
-                image: { url: fs.existsSync(LOGO_PATH)? LOGO_PATH : 'https://i.imgur.com/8Km9tLL.png' },
-                caption: boxStar('🍓 PING PHENIX', `⚡ Vitesse: ${Date.now()-s}ms\n🔥 Status: EN LIGNE ★\n👑 Dev: ${OWNER_NAME}\n📢 ${CHANNEL_LINK}`),
-                footer: "PHENIX V4 STAR",
-                buttons: [
-                    { buttonId: 'channel', buttonText: { displayText: '📢 ★ Chaîne' }, type: 1 },
-                    { buttonId: 'owner', buttonText: { displayText: '👑 ★ Telegram' }, type: 1 }
-                ],
-                headerType: 4
-            }, { quoted: m });
+            // FIX: utiliser readFileSync pour logo local
+            if(fs.existsSync(LOGO_PATH)){
+                await sock.sendMessage(from, {
+                    image: fs.readFileSync(LOGO_PATH),
+                    caption: boxStar('🍓 PING PHENIX', `⚡ Vitesse: ${Date.now()-s}ms\n🔥 Status: EN LIGNE ★\n👑 Dev: ${OWNER_NAME}\n📢 ${CHANNEL_LINK}`)
+                }, { quoted: m });
+            } else {
+                await sock.sendMessage(from, {
+                    image: { url: 'https://i.imgur.com/8Km9tLL.png' },
+                    caption: boxStar('🍓 PING PHENIX', `⚡ Vitesse: ${Date.now()-s}ms\n🔥 Status: EN LIGNE ★\n👑 Dev: ${OWNER_NAME}\n📢 ${CHANNEL_LINK}`)
+                }, { quoted: m });
+            }
+            // Boutons supprimés car cause crash "File is not defined" sur Baileys v6
+            await sock.sendMessage(from, { text: `📢 Channel: ${CHANNEL_LINK}\n👑 Telegram: ${OWNER_TG}` }, { quoted: m });
         }
 
         if(['menu','help','allmenu'].includes(cmd)){
@@ -166,18 +172,18 @@ module.exports = async (sock) => {
         }
         if(cmd==='welcome'){ if(q==='on'){ settings.welcome[from]=true; replyStar('👋 WELCOME','★ ON'); } else { delete settings.welcome[from]; replyStar('👋 WELCOME','★ OFF'); } fs.writeFileSync('./settings.json', JSON.stringify(settings)); }
 
-        // PLAY REAL
         if(['play','song','ytmp3'].includes(cmd)){
             if(!q) return replyStar('▶️ PLAY','★ Usage:.play <nom>\nEx:.play afro beat');
             try{
                 await sock.sendMessage(from, { text: boxStar('▶️ PLAY', `★ Recherche: ${q}\n★ Attends KING...`) }, { quoted: m });
                 const search = await yts(q);
                 const video = search.videos[0];
+                if(!video) return replyStar('❌','Pas trouvé');
                 const info = await ytdl.getInfo(video.url);
                 const audioFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio' });
                 await sock.sendMessage(from, { image: { url: video.thumbnail }, caption: boxStar('🎵 YT', `★ Titre: ${video.title}\n★ Durée: ${video.timestamp}\n★ Vues: ${video.views}`) }, { quoted: m });
-                const audioBuffer = await axios.get(audioFormat.url, { responseType: 'arraybuffer' }).then(r=>r.data);
-                await sock.sendMessage(from, { audio: Buffer.from(audioBuffer), mimetype: 'audio/mpeg', fileName: `${video.title}.mp3` }, { quoted: m });
+                const audioRes = await axios.get(audioFormat.url, { responseType: 'arraybuffer' });
+                await sock.sendMessage(from, { audio: Buffer.from(audioRes.data), mimetype: 'audio/mpeg', fileName: `${video.title}.mp3` }, { quoted: m });
             }catch(e){ replyStar('❌ ERREUR', e.message); }
         }
 
@@ -201,39 +207,45 @@ module.exports = async (sock) => {
         }
 
         if(cmd==='sticker'){
-            if(m.message.imageMessage || m.message.videoMessage){
-                let buf = await sock.downloadMediaMessage(m);
-                await sock.sendMessage(from, { sticker: buf }, { quoted: m });
-            } else replyStar('🎨 STICKER','★ Envoie image +.sticker');
+            try{
+                if(m.message.imageMessage || m.message.videoMessage || m.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage){
+                    let buf = await sock.downloadMediaMessage(m);
+                    await sock.sendMessage(from, { sticker: buf }, { quoted: m });
+                } else replyStar('🎨 STICKER','★ Envoie image +.sticker');
+            }catch(e){ replyStar('❌','Erreur sticker'); }
         }
 
         if(cmd==='tagall' && isGroup){
-            const meta = await sock.groupMetadata(from);
-            let txt = boxStar('📌 TAGALL', q||'Attention tous ★') + "\n";
-            let men = [];
-            meta.participants.forEach(p=>{ txt+=`@${p.id.split('@')[0]} `; men.push(p.id); });
-            await sock.sendMessage(from, { text: txt, mentions: men });
+            try{
+                const meta = await sock.groupMetadata(from);
+                let txt = boxStar('📌 TAGALL', q||'Attention tous ★') + "\n";
+                let men = [];
+                meta.participants.forEach(p=>{ txt+=`@${p.id.split('@')[0]} `; men.push(p.id); });
+                await sock.sendMessage(from, { text: txt, mentions: men });
+            }catch{}
         }
 
         if(cmd==='roll') replyStar('🎲 ROLL', `★ Dé: ${Math.floor(Math.random()*6)+1}`);
         if(cmd==='ship'){ let p=Math.floor(Math.random()*100); replyStar('❤️ SHIP', `★ Compat: ${p}%\n${p>70?'★ Âmes sœurs 🔥':'★ Courage 💔'}`); }
 
-        if(m.message?.buttonsResponseMessage){
-            let id=m.message.buttonsResponseMessage.buttonId;
-            if(id==='channel') await sock.sendMessage(from, { text: boxStar('📢 CHANNEL', CHANNEL_LINK) });
-            if(id==='owner') await sock.sendMessage(from, { text: boxStar('👑 TELEGRAM', OWNER_TG) });
+        } catch(err){
+            console.log("Erreur bot.js: " + err.message);
         }
     });
 
     sock.ev.on('group-participants.update', async (anu)=>{
+        try{
         if(anu.action==='add' && settings.welcome[anu.id]){
             for(let u of anu.participants){
-                await sock.sendMessage(anu.id, {
-                    image: { url: LOGO_PATH },
-                    caption: boxStar('👋 WELCOME', `★ Bienvenue @${u.split('@')[0]}\n★ Dans PHENIX GLITCH\n★ Owner: ${OWNER_TG}`),
-                    mentions:[u]
-                });
+                if(fs.existsSync(LOGO_PATH)){
+                    await sock.sendMessage(anu.id, {
+                        image: fs.readFileSync(LOGO_PATH),
+                        caption: boxStar('👋 WELCOME', `★ Bienvenue @${u.split('@')[0]}\n★ Dans PHENIX GLITCH\n★ Owner: ${OWNER_TG}`),
+                        mentions:[u]
+                    });
+                }
             }
         }
+        }catch{}
     });
-}
+};
